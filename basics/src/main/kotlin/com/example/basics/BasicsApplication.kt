@@ -12,45 +12,58 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
+// First, run create_database.sql on mysql
+fun main(args: Array<String>) {
+    runApplication<BasicsApplication>(*args)
+}
+
 @SpringBootApplication
 class BasicsApplication {
-
-  @Bean
-  fun runner(cs: CustomerService) = ApplicationListener<ApplicationReadyEvent> {
-    cs.all().forEach { println(it) }
-  }
+    @Bean
+    fun runner(cs: CustomerService) = ApplicationListener<ApplicationReadyEvent> {
+        cs.all().forEach { println(it) }
+    }
 }
 
-fun main(args: Array<String>) {
-  runApplication<BasicsApplication>(*args)
+interface CustomerService {
+    fun all(): Collection<Customer>
 }
 
-object Customers : Table() {
-  val id = integer("id").autoIncrement()
-  val name = varchar("name", 255)
+object CustomerTable : Table("Customer") {
+    val id = integer("id").autoIncrement()
+    val name = varchar("name", 255)
 }
 
 @Service
 @Transactional
+@Profile("exposed")
 class ExposedCustomerService : CustomerService {
-  
-  override fun all() =
-    Customers.selectAll().map { Customer(it[Customers.id], it[Customers.name]) }
+    override fun all() =
+        CustomerTable.selectAll().map { Customer(it[CustomerTable.id], it[CustomerTable.name]) }
 }
 
 @Service
 @Profile("jdbc")
 class JdbcCustomerService(val jdbcTemplate: JdbcTemplate) : CustomerService {
+    // In verbose Java, it would be like this:
+    // override fun all(): Collection<Customer> {
+    //     val list = this.jdbcTemplate.query(
+    //         "select * from CUSTOMERS",
+    //         RowMapper<Customer>({ rs, i ->
+    //             Customer(rs.getInt("id"), rs.getString("name"))
+    //         })
+    //     )
+    //     return list
+    // }
 
-  override fun all() =
-      this.jdbcTemplate.query("select * from CUSTOMER") { rs, index ->
-        Customer(rs.getInt("id"), rs.getString("name"))
-      }
+    // In concise kotlin:
+    override fun all() =
+        this.jdbcTemplate.query("SELECT * FROM CUSTOMER") { rs, _ ->
+            Customer(rs.getInt("id"), rs.getString("name"))
+        }
 }
 
 data class Customer(val id: Int, val name: String)
 
-interface CustomerService {
 
-  fun all(): Collection<Customer>
-}
+
